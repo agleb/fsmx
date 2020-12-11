@@ -9,6 +9,25 @@ defmodule Fsmx do
     end
   end
 
+  @spec transition_with_handler(struct(), binary(), map) :: {:ok, struct, map} | {:error, any}
+  def transition_with_handler(struct, new_state, payload \\ %{}) do
+    with {:ok, struct} <- before_transition(struct, new_state),
+         {:ok, handler_result, _effects} <-
+           maybe_run_transition_handler(struct, new_state, payload) do
+      {:ok, %{struct | state: new_state}, handler_result}
+    end
+  end
+
+  def maybe_run_transition_handler(%mod{} = _struct, new_state, payload) do
+    fsm = mod.__fsmx__()
+
+    try do
+      fsm.handle_transition(new_state, payload)
+    rescue
+      Elixir.FunctionClauseError -> {:ok, nil, :no_handler_for_transition}
+    end
+  end
+
   if Code.ensure_loaded?(Ecto) do
     @spec transition_changeset(struct(), binary, map) :: Ecto.Changeset.t()
     def transition_changeset(%mod{state: state} = schema, new_state, params \\ %{}) do
